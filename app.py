@@ -552,7 +552,6 @@ else:
                     else:
                         print("⚠️ Recommended time string not found or invalid.")
                         hour = 12
- 
 
                     # input("Enter to continue")
                     with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
