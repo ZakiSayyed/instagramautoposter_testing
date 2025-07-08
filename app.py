@@ -532,28 +532,26 @@ else:
 
                     print("Generated caption:", generated_output)
 
-                    match = re.search(r"Recommended Time:\s*(\d{1,2})", generated_output)
-
-                    recommended_time = None
                     hour = None
+                    if generated_output:
+                        match = re.search(r"(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
+                        if match:
+                            hour = int(match.group(1))
+                            period = match.group(2).upper()
 
-                    if match:
-                        hour = int(match.group(1))
-                        print("Extracted hour:", hour)
-                    else:
-                        print("⚠️ No hour found.")
-                        
-                    recommended_time = f"{hour:02d}:00"
-                    print("✅ Recommended hour to post (24h):", hour)
+                            # Convert to 24-hour format
+                            if period == "PM" and hour != 12:
+                                hour += 12
+                            elif period == "AM" and hour == 12:
+                                hour = 0
 
-                    # Safely use the hour (e.g., only combine if it exists)
                     if hour is not None:
-                        selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=hour, minute=0)
-                        print("📅 Scheduled time:", selected_time)
+                        print("✅ Extracted posting hour (24h):", hour)
+                        # Use it here safely
+                        # e.g., datetime.replace(hour=hour)
                     else:
-                        st.warning("⚠️ Could not determine recommended hour. Defaulting to 12 PM.")
+                        print("⚠️ Recommended time string not found or invalid.")
                         hour = 12
-                        selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=hour, minute=0) 
  
 
                     # input("Enter to continue")
