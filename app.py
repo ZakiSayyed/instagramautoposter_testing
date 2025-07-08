@@ -530,28 +530,21 @@ else:
                         st.session_state.last_image = image.name
                     generated_output = st.session_state.generated_caption
 
-                    print("Generated caption:", st.session_state.generated_caption)
+                    print("Generated caption:", generated_output)
 
-                    time_match = re.search(r"Recommended Time:\s*(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
+                    match = re.search(r"Recommended Time:\s*(\d{1,2})", generated_output)
 
                     recommended_time = None
                     hour = None
 
-                    if time_match:
-                        hour = int(time_match.group(1))
-                        period = time_match.group(2).upper()
-                        
-                        if period == "PM" and hour != 12:
-                            hour += 12
-                        elif period == "AM" and hour == 12:
-                            hour = 0
-                        
-                        recommended_time = f"{hour:02d}:00"
-                        print("✅ Recommended hour to post (24h):", hour)
-
+                    if match:
+                        hour = int(match.group(1))
+                        print("Extracted hour:", hour)
                     else:
-                        print("⚠️ Could not extract recommended time string.")
-                        recommended_time = "Not found"
+                        print("⚠️ No hour found.")
+                        
+                    recommended_time = f"{hour:02d}:00"
+                    print("✅ Recommended hour to post (24h):", hour)
 
                     # Safely use the hour (e.g., only combine if it exists)
                     if hour is not None:
