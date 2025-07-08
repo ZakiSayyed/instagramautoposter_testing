@@ -518,10 +518,6 @@ else:
                     st.error(f"❌ Image conversion failed: {e}")
                     final_image_path = None
 
-            # if caption_mode == "Manual":
-            #     caption = st.text_area("Caption", height=100)
-
-        # elif caption_mode == "AI-Generated":
             if image and final_image_path:
 
                 # Only generate caption if not already generated
