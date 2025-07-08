@@ -577,6 +577,7 @@ else:
             else:
                 st.info("Please upload an image to generate a caption.")
 
+
         # st.header("Schedule your post:")
         # date = st.date_input("Select date", date.today())
 
