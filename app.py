@@ -367,7 +367,6 @@ else:
             #     caption = st.text_area("Caption", height=100)
 
         # elif caption_mode == "AI-Generated":
-            input("Enter")
             if image and final_image_path:
                 # Only generate caption if not already generated
                 for image in images:
