@@ -329,7 +329,7 @@ else:
         st.write("Welcome to the Home page!")
 
         # caption_mode = st.radio("Caption Mode", ["Manual", "AI-Generated"])
-        images = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png", "heic", "heif"], accept_multiple_files=True)
+        images = st.file_uploader("Upload Images", type=["jpg", "jpeg", "png", "heic", "heif"], accept_multiple_files=True)
 
         caption = ""
         converted_image_path = None
@@ -346,7 +346,7 @@ else:
 
                 try:
                     # Convert and save image to uploads
-                    os.makedirs("uploads", exist_ok=True)
+                    os.makedirs("C:/uploads", exist_ok=True)
                     converted_image_path = convert_image(temp_input_path, "jpg")
                     final_image_path = os.path.join("uploads", os.path.basename(converted_image_path))
 
@@ -367,6 +367,7 @@ else:
             #     caption = st.text_area("Caption", height=100)
 
         # elif caption_mode == "AI-Generated":
+            input("Enter")
             if image and final_image_path:
                 # Only generate caption if not already generated
                 for image in images:
