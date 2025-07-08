@@ -348,7 +348,7 @@ else:
                     # Convert and save image to uploads
                     os.makedirs("C:/uploads", exist_ok=True)
                     converted_image_path = convert_image(temp_input_path, "jpg")
-                    final_image_path = os.path.join("uploads", os.path.basename(converted_image_path))
+                    final_image_path = os.path.join("C:/uploads", os.path.basename(converted_image_path))
 
                     # Remove existing file if it exists
                     if os.path.exists(final_image_path):
@@ -378,8 +378,8 @@ else:
                     caption = st.text_area("Generated Caption (editable)", value=st.session_state.generated_caption, height=100)
                     with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
                         if image and caption:
-                            os.makedirs("uploads", exist_ok=True)  # ✅ Ensure directory exists
-                            image_path = f"uploads/{image.name}"
+                            os.makedirs("C:/uploads", exist_ok=True)  # ✅ Ensure directory exists
+                            image_path = f"C:/uploads/{image.name}"
                             with open(image_path, "wb") as f:
                                 f.write(image.read())
                             my_date = date.today()  # ← replace with your actual date variable
