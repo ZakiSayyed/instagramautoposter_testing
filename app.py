@@ -1,5 +1,5 @@
 #Prod
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 import os
 import streamlit as st
 import requests
@@ -9,6 +9,13 @@ import pillow_heif
 import os
 import base64
 from supabase import create_client, Client
+from pillow_heif import register_heif_opener
+from dateutil import parser
+import pytz
+import re
+
+
+register_heif_opener()
 
 # Use secrets from Streamlit Cloud
 ACCESS_TOKEN = st.secrets["ACCESS_TOKEN"]
@@ -24,6 +31,55 @@ USERNAME = st.secrets["USER_NAME"]
 PASSWORD = st.secrets["USER_PASSWORD"]
 SUPABASE_URL = st.secrets["SUPABASE_URL"]  # Add this to your secrets.toml
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+GRAPH_URL = "https://graph.facebook.com/v23.0"
+
+#______________________________________________________________________________________________________#
+
+def get_recent_media(limit=5):
+    url = f"{GRAPH_URL}/{IG_USER_ID}/media"
+    params = {
+        "fields": "id,timestamp,caption,media_type,media_url",
+        "limit": limit,
+        "access_token": ACCESS_TOKEN
+    }
+    res = requests.get(url, params=params).json()
+    return res.get('data', [])
+
+def get_media_engagement(media_id):
+    url = f"{GRAPH_URL}/{media_id}/insights"
+    params = {
+        "metric": "reach,likes,comments,shares,saved,total_interactions",
+        "access_token": ACCESS_TOKEN
+    }
+    res = requests.get(url, params=params).json()
+    insights = res.get("data", [])
+
+    if not insights:
+        return {}
+
+    return {i['name']: i['values'][0]['value'] for i in insights}
+
+def build_post_insight_json():
+    posts = get_recent_media()
+    bundle = []
+
+    for post in posts:
+        post_data = {
+            "id": post["id"],
+        }
+
+        # Parse timestamps
+        timestamp_utc = parser.isoparse(post["timestamp"])
+        timestamp_est = timestamp_utc.astimezone(pytz.timezone("US/Eastern"))
+        post_data["timestamp_est"] = timestamp_est.isoformat()
+
+        # Add engagement
+        metrics = get_media_engagement(post["id"])
+        post_data["metrics"] = metrics
+
+        bundle.append(post_data)
+
+    return bundle
 
 #______________________________________________________________________________________________________#
 #Database codes
@@ -57,7 +113,7 @@ def delete_post(post_id):
 #______________________________________________________________________________________________________#
 
 #Generate captions
-def generate_caption(image_path, image_name):
+def generate_caption(image_path, image_name, engagement_data):
 
     headers = {
         "Content-Type": "application/json",
@@ -68,65 +124,93 @@ def generate_caption(image_path, image_name):
         image_data = img_file.read()
     base64_image = base64.b64encode(image_data).decode('utf-8')
 
-    structure = """1. Hook:  
-   • One clever, stylish, and confident sentence.  
-   • Emojis welcome (if tasteful and light).  
-   • Should feel cool, fresh, and culturally aware.
 
-2. Core description (2–3 short, punchy sentences):  
-   • Describe what’s happening in the image (or suggested scene).  
-   • Highlight:
-     – Handmade craftsmanship  
-     – Cultural inspiration  
-     – Premium materials  
-     – Black ownership  
-     – Style and function (UV protection, comfort)  
-   • Name the specific design (e.g. “Barbados Edition”) if included in the image or description.  
-   • Reference relevant holidays or cultural moments (if applicable).
+    # -------------------- Step 1: Recommended Posting Time Prompt --------------------
 
-3. Caption should be in a new Line and Line break: Use a single em dash (—)
+    recommended_time_prompt = f"""
+    You are a social media strategist helping an eyewear brand optimize their Instagram posting schedule.
 
-4. Hashtags block (Max 15 hashtags):  
-   • Always include: `#CIKEyewear` and `#CultureInEveryFrame`  
-   • Vary the rest based on content, choosing from:
-     #BlackOwnedEyewear  
-     #HandmadeInItaly  
-     #LuxuryEyewear  
-     #BarbadosEdition  
-     #AmericaBlackEdition  
-     #StatementSunglasses  
-     #BuiltByHand  
-     #BoldByDesign  
-     #SlowFashion  
-     #ArtisanEyewear  
-     #IslandStyle  
-     #BlackLuxury  
-     #CulturalCraftsmanship  
-     #FounderLed  
-     #SummerStyle """
+    Your task is to:
+    • Analyze hourly engagement trends across past posts.
+    • Optionally factor in follower online activity per hour (if available).
+    • Recommend the **single best hour to post (in EST)** to maximize visibility and engagement.
 
-    prompt_use =f"""Generate an Instagram caption for a photo of CIK Eyewear sunglasses.
+    Data available:
+    • Post timestamps (UTC + EST)
+    • Engagement metrics per post: likes, comments, shares, saves, total_interactions
+    • Average engagement per hour (0–23 UTC)
+    • (Optional) Online follower distribution by hour
 
-Brand Overview:
-CIK is a Black-owned, Caribbean-American–founded luxury eyewear brand. Every pair is handmade in Italy from premium materials, designed with cultural storytelling at its core. Styles are inspired by heritage, including features like the Barbados Island–carved Trident or the America Black Edition eagle‑beak bridge. The brand blends identity, history, and bold craftsmanship—celebrating global Black excellence with every frame.
+    Instructions:
+    • Prioritize hours where engagement is consistently high.
+    • If follower activity supports the same hours, boost confidence in those times.
+    • Return only the best hour to post (EST), with a short explanation if needed.
 
-Caption must:
-• Use the {image_name} wihtout the file extension as reference to generate the caption.
-• Directly and only start with the caption, no need to say "Sure, here you go" or "Here's a caption for your image."
-• Follow the exact structure mentioned at the end.
-• Be based on what’s visually posted or described (CIK image, design, season, or holiday)
-• Recognize eyewear design names (e.g. Barbados Edition, America Black Edition, etc.)
-• Acknowledge calendar moments or holidays (e.g. summer, Carnival, Juneteenth, Black History Month) when relevant to the post
-• Feel stylish, culturally aware, and on-brand
-• Not exceed 200 characters total
-• Use no more than 15 hashtags per post
-• Images may be reused every 90 days, so vary the caption even when the image is repeated
+    Engagement Data:
+    {engagement_data}
+    """
 
-Tone:
-Proud, stylish, confident, culturally connected, inclusive, founder-led, and community-driven.
-Structure:
-{structure}"""
+    # -------------------- Step 2: Caption Format Structure --------------------
 
+    structure = """
+    1. Hook:  
+    • One clever, stylish, and confident sentence  
+    • Use tasteful emojis  
+    • Must feel culturally aware and modern
+
+    2. Core description (2–3 short punchy sentences):  
+    • Describe the eyewear or scene  
+    • Highlight craftsmanship, culture, quality, and brand values  
+    • Mention design names like “Barbados Edition” if visually identifiable  
+    • Reference current seasons or cultural moments if relevant
+
+    3. Caption break: Use a single em dash (—)
+
+    4. Hashtags block (max 15):  
+    • Always include: #CIKEyewear #CultureInEveryFrame  
+    • Choose from:
+        #BlackOwnedEyewear  
+        #HandmadeInItaly  
+        #LuxuryEyewear  
+        #BarbadosEdition  
+        #AmericaBlackEdition  
+        #StatementSunglasses  
+        #BuiltByHand  
+        #BoldByDesign  
+        #SlowFashion  
+        #ArtisanEyewear  
+        #IslandStyle  
+        #BlackLuxury  
+        #CulturalCraftsmanship  
+        #FounderLed  
+        #SummerStyle
+    """
+
+    # -------------------- Step 3: Final Prompt to Send to LLM --------------------
+
+    prompt_use = f"""
+    Generate an Instagram caption for a photo of CIK Eyewear sunglasses.
+
+    Brand Overview:
+    CIK is a Black-owned, Caribbean-American–founded luxury eyewear brand. Every pair is handmade in Italy using premium materials and cultural storytelling. Designs include symbols like the Barbados Trident or the eagle-beak bridge of the America Black Edition. The brand is bold, confident, heritage-driven, and stylish—representing global Black excellence.
+
+    Instructions:
+    • Reference the image name `{image_name}` (without file extension if the name makes sense otherwise ignore it)
+    • Write a caption that reflects what’s visible or known about the photo
+    • Avoid generic filler text or intros
+    • Use no more than 200 characters total
+    • Match the format and tone defined below
+    • Avoid repeating hashtags
+    • Style: confident, inclusive, culturally connected, and founder-led
+
+    Follow this structure exactly:
+    {structure}
+
+    Your response must always use "Recommended Time:" to indicate the best time to post (don't use anything else to return the time other than "Recommended Time:").    
+
+    Use the following information to determine it:
+    {recommended_time_prompt}
+    """
 
     payload = {
         "model": "gpt-4o",
@@ -328,12 +412,80 @@ else:
         st.title("📱 Instagram Auto Poster")
         st.write("Welcome to the Home page!")
 
-        # caption_mode = st.radio("Caption Mode", ["Manual", "AI-Generated"])
-        images = st.file_uploader("Upload Images", type=["jpg", "jpeg", "png", "heic", "heif"], accept_multiple_files=True)
+        st.header("Select schedule criteria")
+        num_of_posts = st.number_input("Number of posts per interval", min_value=1, step=1, format="%d")
+        frequency = st.selectbox("Post frequency", ["Daily", "Weekly", "Monthly"])
+        st.write(f"Number of posts: {num_of_posts}")
+        st.write(f"Frequency: {frequency}")
+        proceed = False  # Whether to proceed with scheduling
 
+        with st.spinner("Generating engaement data..."):
+            engagement_data = build_post_insight_json()     
+
+        if num_of_posts and frequency:
+            images = st.file_uploader("Upload Images", type=["jpg", "jpeg", "png", "heic", "heif"], accept_multiple_files=True)
+            st.write(f"Number of images uploaded: {len(images) if images else 0}")
+
+            if images and num_of_posts:
+           
+                total_images = len(images)
+                full_batches = total_images // num_of_posts
+                remaining_images = total_images % num_of_posts
+
+                # st.info(f"You uploaded **{total_images} images**.")
+                st.write(f"That gives you **{full_batches} full batch(es)** of {num_of_posts} images.")
+
+                if remaining_images != 0:
+                    st.warning(f"You'll have **{remaining_images} leftover image(s)** which won’t fill a complete batch.")
+
+                    user_choice = st.radio("Do you want to proceed with this?", ["Yes, proceed", "No, I'll upload more images"])
+
+                    if user_choice == "Yes, proceed":
+                        proceed = True
+                    else:
+                        st.stop()
+                else:
+                    proceed = True
+
+                if proceed:
+                    # Generate the schedule
+                    interval_days = {"daily": 1, "weekly": 7, "monthly": 30}[frequency.lower()]
+                    start_date = datetime.today().date()
+
+                    schedule = []
+                    index = 0
+                    for batch_num in range(full_batches + (1 if remaining_images else 0)):
+                        batch_images = images[index: index + num_of_posts]
+                        index += num_of_posts
+                        post_date = start_date + timedelta(days=batch_num * interval_days)
+                        schedule.append((post_date, batch_images))
+
+                    if st.checkbox("Show posting schedule"):
+                        # Show schedule
+                        st.success("✅ Your posts will be scheduled as follows:")
+
+                        for date, images in schedule:
+                            st.markdown(f"**{date.strftime('%Y-%m-%d')}**")
+                            # cols = st.columns(len(images))
+                            cols = st.columns(3)  # Create 3 columns
+                            for idx, img_file in enumerate(images):
+                                try:
+                                    img = Image.open(img_file)
+                                    # Optionally resize to thumbnail (150x150 max)
+                                    img.thumbnail((150, 150))
+
+                                    # Display image in column
+                                    with cols[idx % 3]:
+                                        st.image(img, caption=img_file.name, use_container_width=True)
+
+                                except Exception as e:
+                                    st.warning(f"❌ Could not display {img_file.name}: {e}")
+
+        else:
+            st.warning("Please enter the number of posts and select a frequency before uploading images.")
+            images = None
         caption = ""
         converted_image_path = None
-        
         if images:
             for image in images:
                 # Save uploaded image temporarily
@@ -346,9 +498,9 @@ else:
 
                 try:
                     # Convert and save image to uploads
-                    os.makedirs("C:/uploads", exist_ok=True)
+                    os.makedirs("uploads", exist_ok=True)
                     converted_image_path = convert_image(temp_input_path, "jpg")
-                    final_image_path = os.path.join("C:/uploads", os.path.basename(converted_image_path))
+                    final_image_path = os.path.join("uploads", os.path.basename(converted_image_path))
 
                     # Remove existing file if it exists
                     if os.path.exists(final_image_path):
@@ -356,7 +508,7 @@ else:
 
                     os.rename(converted_image_path, final_image_path)
 
-                    st.success("✅ Image converted and saved successfully.")
+                    # st.success("✅ Image converted and saved successfully.")
                     print("Image saved at:", final_image_path)
 
                 except Exception as e:
@@ -367,26 +519,57 @@ else:
             #     caption = st.text_area("Caption", height=100)
 
         # elif caption_mode == "AI-Generated":
+
             if image and final_image_path:
+
                 # Only generate caption if not already generated
                 for image in images:
-                    
                     if "generated_caption" not in st.session_state or st.session_state.get("last_image") != image.name:
                         with st.spinner("Generating caption..."):
-                            st.session_state.generated_caption = generate_caption(final_image_path,image.name)
+                            st.session_state.generated_caption = generate_caption(final_image_path,image.name, engagement_data)
                         st.session_state.last_image = image.name
-                    caption = st.text_area("Generated Caption (editable)", value=st.session_state.generated_caption, height=100)
+                    generated_output = st.session_state.generated_caption
+
+                    print("Generated caption:", st.session_state.generated_caption)
+
+                    time_match = re.search(r"Recommended Time:\s*(\d{1,2}\s*[APMapm]{2})", generated_output)
+                    recommended_time = time_match.group(1).strip() if time_match else None
+
+                    # Extract caption including hashtags (everything before "Recommended Time")
+                    caption_text = generated_output.split("Recommended Time:")[0].strip()
+
+                    caption = st.text_area("Generated Caption", value=caption_text, height=100)
+                    recommended_time_to_post = st.text_input("Recommended Time to Post (EST)", value=recommended_time, disabled=True)
+                    
+                    # 4. Convert recommended time to hour (24-hour format)
+                    hour = None
+                    if recommended_time:
+                        match = re.search(r"(\d{1,2})\s*(AM|PM)", recommended_time, re.IGNORECASE)
+                        if match:
+                            hour = int(match.group(1))
+                            period = match.group(2).upper()
+                            if period == "PM" and hour != 12:
+                                hour += 12
+                            elif period == "AM" and hour == 12:
+                                hour = 0
+                            print("✅ Recommended hour to post:", hour)
+                        else:
+                            print("⚠️ Could not extract recommended hour.")
+                    else:
+                        print("⚠️ Recommended time string not found.")
+
+                    print("Recommended hour to post:", hour)
+                    # input("Enter to continue")
                     with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
                         if image and caption:
-                            os.makedirs("C:/uploads", exist_ok=True)  # ✅ Ensure directory exists
-                            image_path = f"C:/uploads/{image.name}"
+                            os.makedirs("uploads", exist_ok=True)  # ✅ Ensure directory exists
+                            image_path = f"uploads/{image.name}"
                             with open(image_path, "wb") as f:
                                 f.write(image.read())
                             my_date = date.today()  # ← replace with your actual date variable
-                            selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=11, minute=0)
-                            print(selected_time)
+                            selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=hour, minute=0)
+
                             scheduled_time = selected_time
-                            print(scheduled_time)                        
                             add_post(image_path, caption, scheduled_time)
                             st.success("Post scheduled successfully!")
                         else:
