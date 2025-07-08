@@ -532,33 +532,37 @@ else:
 
                     print("Generated caption:", st.session_state.generated_caption)
 
-                    time_match = re.search(r"Recommended Time:\s*(\d{1,2}\s*[APMapm]{2})", generated_output)
-                    recommended_time = time_match.group(1).strip() if time_match else None
+                    time_match = re.search(r"Recommended Time:\s*(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
 
-                    # Extract caption including hashtags (everything before "Recommended Time")
-                    caption_text = generated_output.split("Recommended Time:")[0].strip()
-
-                    caption = st.text_area("Generated Caption", value=caption_text, height=100)
-                    recommended_time_to_post = st.text_input("Recommended Time to Post (EST)", value=recommended_time, disabled=True)
-                    
-                    # 4. Convert recommended time to hour (24-hour format)
+                    recommended_time = None
                     hour = None
-                    if recommended_time:
-                        match = re.search(r"(\d{1,2})\s*(AM|PM)", recommended_time, re.IGNORECASE)
-                        if match:
-                            hour = int(match.group(1))
-                            period = match.group(2).upper()
-                            if period == "PM" and hour != 12:
-                                hour += 12
-                            elif period == "AM" and hour == 12:
-                                hour = 0
-                            print("✅ Recommended hour to post:", hour)
-                        else:
-                            print("⚠️ Could not extract recommended hour.")
-                    else:
-                        print("⚠️ Recommended time string not found.")
 
-                    print("Recommended hour to post:", hour)
+                    if time_match:
+                        hour = int(time_match.group(1))
+                        period = time_match.group(2).upper()
+                        
+                        if period == "PM" and hour != 12:
+                            hour += 12
+                        elif period == "AM" and hour == 12:
+                            hour = 0
+                        
+                        recommended_time = f"{hour:02d}:00"
+                        print("✅ Recommended hour to post (24h):", hour)
+
+                    else:
+                        print("⚠️ Could not extract recommended time string.")
+                        recommended_time = "Not found"
+
+                    # Safely use the hour (e.g., only combine if it exists)
+                    if hour is not None:
+                        selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=hour, minute=0)
+                        print("📅 Scheduled time:", selected_time)
+                    else:
+                        st.warning("⚠️ Could not determine recommended hour. Defaulting to 12 PM.")
+                        hour = 12
+                        selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=hour, minute=0) 
+ 
+
                     # input("Enter to continue")
                     with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
                         if image and caption:
