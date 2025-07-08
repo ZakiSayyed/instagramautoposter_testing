@@ -531,6 +531,7 @@ else:
                     generated_output = st.session_state.generated_caption
 
                     print("Generated caption:", generated_output)
+                    caption = generated_output.split("Recommended Time:")[0].strip()
 
                     hour = None
                     if generated_output:
