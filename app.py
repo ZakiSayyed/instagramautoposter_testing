@@ -86,7 +86,7 @@ def build_post_insight_json():
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def add_post(image_path, caption, scheduled_time):
+def add_post(image_path, caption, scheduled_time, post_date):
     supabase.table("postsdb").insert({
         "image_path": image_path,
         "caption": caption,
@@ -451,14 +451,16 @@ else:
                     # Generate the schedule
                     interval_days = {"daily": 1, "weekly": 7, "monthly": 30}[frequency.lower()]
                     start_date = datetime.today().date()
-
-                    schedule = []
                     index = 0
+
+                    image_schedule = []
                     for batch_num in range(full_batches + (1 if remaining_images else 0)):
                         batch_images = images[index: index + num_of_posts]
                         index += num_of_posts
                         post_date = start_date + timedelta(days=batch_num * interval_days)
-                        schedule.append((post_date, batch_images))
+                        for img in batch_images:
+                            image_schedule.append((img, post_date))
+
 
                     if st.checkbox("Show posting schedule"):
                         # Show schedule
@@ -467,7 +469,7 @@ else:
                         for date, images in schedule:
                             st.markdown(f"**{date.strftime('%Y-%m-%d')}**")
                             # cols = st.columns(len(images))
-                            cols = st.columns(3)  # Create 3 columns
+                            cols = st.columns(5)  # Create 3 columns
                             for idx, img_file in enumerate(images):
                                 try:
                                     img = Image.open(img_file)
@@ -475,7 +477,7 @@ else:
                                     img.thumbnail((150, 150))
 
                                     # Display image in column
-                                    with cols[idx % 3]:
+                                    with cols[idx % 5]:
                                         st.image(img, caption=img_file.name, use_container_width=True)
 
                                 except Exception as e:
@@ -487,7 +489,8 @@ else:
         caption = ""
         converted_image_path = None
         if images:
-            for image in images:
+            for image, post_date in image_schedule:
+
                 # Save uploaded image temporarily
                 actual_image_path = image.name
                 print(actual_image_path)
@@ -523,7 +526,8 @@ else:
             if image and final_image_path:
 
                 # Only generate caption if not already generated
-                for image in images:
+                for image, post_date in image_schedule:
+
                     if "generated_caption" not in st.session_state or st.session_state.get("last_image") != image.name:
                         with st.spinner("Generating caption..."):
                             st.session_state.generated_caption = generate_caption(final_image_path,image.name, engagement_data)
@@ -548,13 +552,10 @@ else:
 
                     if hour is not None:
                         print("✅ Extracted posting hour (24h):", hour)
-                        # Use it here safely
-                        # e.g., datetime.replace(hour=hour)
                     else:
                         print("⚠️ Recommended time string not found or invalid.")
                         hour = 12
 
-                    # input("Enter to continue")
                     with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
                         if image and caption:
                             os.makedirs("uploads", exist_ok=True)  # ✅ Ensure directory exists
@@ -562,51 +563,14 @@ else:
                             with open(image_path, "wb") as f:
                                 f.write(image.read())
                             my_date = date.today()  # ← replace with your actual date variable
-                            selected_time = datetime.combine(date.today(), datetime.min.time()).replace(hour=hour, minute=0)
-
+                            selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
                             scheduled_time = selected_time
-                            add_post(image_path, caption, scheduled_time)
+                            add_post(image_path, caption, scheduled_time, post_date)
                             st.success("Post scheduled successfully!")
                         else:
                             st.error("Please provide both image and caption")
             else:
                 st.info("Please upload an image to generate a caption.")
-
-
-        # st.header("Schedule your post:")
-        # date = st.date_input("Select date", date.today())
-
-        # col1, col2, col3 = st.columns(3)
-        # with col1:
-        #     hour = st.selectbox("Hour", list(range(1, 13)), index=0)
-        # with col2:
-        #     minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25,30,35, 40, 45, 50, 55], index=0)
-        # with col3:
-        #     ampm = st.selectbox("AM/PM", ["AM", "PM"], index=0)
-
-        # # Convert to 24-hour time for datetime.combine
-        # if ampm == "PM" and hour != 12:
-        #     hour_24 = hour + 12
-        # elif ampm == "AM" and hour == 12:
-        #     hour_24 = 0
-        # else:
-        #     hour_24 = hour
-
-        # selected_time = datetime.combine(date, datetime.min.time()).replace(hour=hour_24, minute=minute)
-        # st.write(f"Selected time: {hour:02d}:{minute:02d} {ampm}")
-
-        # scheduled_time = selected_time
-
-        # if st.button("Schedule Post"):
-            # if image and caption:
-            #     os.makedirs("uploads", exist_ok=True)  # ✅ Ensure directory exists
-            #     image_path = f"uploads/{image.name}"
-            #     with open(image_path, "wb") as f:
-            #         f.write(image.read())
-            #     add_post(image_path, caption, scheduled_time)
-            #     st.success("Post scheduled successfully!")
-            # else:
-            #     st.error("Please provide both image and caption")
 
     elif menu == "Analytics":
         st.title("📊 Analytics Dashboard")
