@@ -86,6 +86,12 @@ def build_post_insight_json():
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
+def post_already_scheduled(image_name, scheduled_time):
+    response = supabase.table("postsdb").select("*").eq("image_path", f"uploads/{image_name}").eq("scheduled_time", str(scheduled_time)).execute()
+    return bool(response.data)
+
+
 def add_post(image_path, caption, scheduled_time, post_date):
     supabase.table("postsdb").insert({
         "image_path": image_path,
@@ -377,6 +383,7 @@ def convert_image(input_path, output_format='jpg'):
 
 
 st.set_page_config(page_title="Instagram Auto Poster")
+posting_status = False
 
 # Set up session state for login
 if "logged_in" not in st.session_state:
@@ -438,7 +445,7 @@ else:
                 if remaining_images != 0:
                     st.warning(f"You'll have **{remaining_images} leftover image(s)** which won’t fill a complete batch.")
 
-                    user_choice = st.radio("Do you want to proceed with this?", ["Yes, proceed", "No, I'll upload more images"])
+                    user_choice = st.radio("Do you want to proceed with this?", ["Nothing selected", "Yes, proceed", "No, I'll upload more images"])
 
                     if user_choice == "Yes, proceed":
                         proceed = True
@@ -459,29 +466,25 @@ else:
                         index += num_of_posts
                         post_date = start_date + timedelta(days=batch_num * interval_days)
                         for img in batch_images:
-                            image_schedule.append((img, post_date))
-
+                            image_schedule.append((post_date, img))
 
                     if st.checkbox("Show posting schedule"):
                         # Show schedule
                         st.success("✅ Your posts will be scheduled as follows:")
 
-                        for date, images in schedule:
-                            st.markdown(f"**{date.strftime('%Y-%m-%d')}**")
-                            # cols = st.columns(len(images))
-                            cols = st.columns(5)  # Create 3 columns
-                            for idx, img_file in enumerate(images):
-                                try:
-                                    img = Image.open(img_file)
-                                    # Optionally resize to thumbnail (150x150 max)
-                                    img.thumbnail((150, 150))
+                        for scheduled_date, img_file in image_schedule:
+                            if isinstance(scheduled_date, str):
+                                scheduled_date = datetime.strptime(scheduled_date, "%Y-%m-%d")
 
-                                    # Display image in column
-                                    with cols[idx % 5]:
-                                        st.image(img, caption=img_file.name, use_container_width=True)
-
-                                except Exception as e:
-                                    st.warning(f"❌ Could not display {img_file.name}: {e}")
+                            st.markdown(f"**{scheduled_date.strftime('%Y-%m-%d')}**")
+                            cols = st.columns(5)
+                            try:
+                                img = Image.open(img_file)
+                                img.thumbnail((150, 150))
+                                with cols[0]:
+                                    st.image(img, caption=img_file.name, use_container_width=True)
+                            except Exception as e:
+                                st.warning(f"Could not display image: {e}")
 
         else:
             st.warning("Please enter the number of posts and select a frequency before uploading images.")
@@ -489,7 +492,7 @@ else:
         caption = ""
         converted_image_path = None
         if images:
-            for image, post_date in image_schedule:
+            for post_date,image in image_schedule:
 
                 # Save uploaded image temporarily
                 actual_image_path = image.name
@@ -521,12 +524,13 @@ else:
             if image and final_image_path:
 
                 # Only generate caption if not already generated
-                for image, post_date in image_schedule:
+                for post_date,image in image_schedule:
 
                     if "generated_caption" not in st.session_state or st.session_state.get("last_image") != image.name:
                         with st.spinner("Generating caption..."):
-                            st.session_state.generated_caption = generate_caption(final_image_path,image.name, engagement_data)
+                            st.session_state.generated_caption = generate_caption(final_image_path, image.name, engagement_data)
                         st.session_state.last_image = image.name
+
                     generated_output = st.session_state.generated_caption
 
                     print("Generated caption:", generated_output)
@@ -550,20 +554,26 @@ else:
                     else:
                         print("⚠️ Recommended time string not found or invalid.")
                         hour = 12
+                    if posting_status == False:
+                        with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
+                            if image and caption:
+                                os.makedirs("uploads", exist_ok=True)  # ✅ Ensure directory exists
+                                image_path = f"uploads/{image.name}"
+                                with open(image_path, "wb") as f:
+                                    f.write(image.read())
+                                my_date = date.today()  # ← replace with your actual date variable
+                                selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
+                                scheduled_time = selected_time
+                                if post_already_scheduled(image.name, scheduled_time):
+                                    st.info(f"✅ Already scheduled: {image.name} on {scheduled_time}")
+                                else:
+                                    add_post(image_path, caption, scheduled_time, post_date)
+                                    st.success("✅ Post scheduled successfully!")
 
-                    with st.spinner("Scheduling post"):  # Add a small delay to ensure caption is generated before displaying
-                        if image and caption:
-                            os.makedirs("uploads", exist_ok=True)  # ✅ Ensure directory exists
-                            image_path = f"uploads/{image.name}"
-                            with open(image_path, "wb") as f:
-                                f.write(image.read())
-                            my_date = date.today()  # ← replace with your actual date variable
-                            selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
-                            scheduled_time = selected_time
-                            add_post(image_path, caption, scheduled_time, post_date)
-                            st.success("Post scheduled successfully!")
-                        else:
-                            st.error("Please provide both image and caption")
+                            else:
+                                st.error("Please provide both image and caption")
+                    else:
+                        st.success("Post already scheduled.")
             else:
                 st.info("Please upload an image to generate a caption.")
 
@@ -697,8 +707,7 @@ else:
             data = r.json().get("data", [])
             return sum(item.get(metric, 0) for item in data)
 
-        # Streamlit UI
-        # st.set_page_config("Instagram Insights", layout="wide")
+
         st.title("📊 Instagram Insights Dashboard")
 
         tab1, tab2 = st.tabs(["📋 Table View", "📈 Charts View"])
@@ -845,11 +854,12 @@ else:
     # ...existing code...
 
     elif menu == "Configuration":
-        DEFAULT_CONFIG_KEYS = [
-        "ACCESS_TOKEN", "IG_USER_ID"
-    ]
-        st.title("🔧 Configuration")
-        st.write("Configure your Instagram API settings here.")
+        st.warning("This feature is under development. Please check back later.")
+    #     DEFAULT_CONFIG_KEYS = [
+    #     "ACCESS_TOKEN", "IG_USER_ID"
+    # ]
+    #     st.title("🔧 Configuration")
+    #     st.write("Configure your Instagram API settings here.")
 
         # for key in DEFAULT_CONFIG_KEYS:
         #     config[key] = st.text_input(
