@@ -880,7 +880,6 @@ else:
                         "color": "#28a745" if post["posted"] else "#ffc107",
                     })
                 
-
                 options = {
                     "initialView": "dayGridMonth",
                     "editable": False,
