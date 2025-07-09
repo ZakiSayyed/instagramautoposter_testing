@@ -952,7 +952,6 @@ else:
                                 if st.checkbox("Show image", key=f"show_image_{post['id']}"):
                                     st.image(post["image_url"], width=150, caption="Preview")
 
-
                     with row2:
                         if post.get("caption"):
                             if st.checkbox("Edit Caption", key=f"edit_caption_{post['id']}"):
