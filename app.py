@@ -850,9 +850,6 @@ else:
         else:
             st.info("No scheduled posts found.")
 
-
-    # ...existing code...
-
     elif menu == "Configuration":
         st.warning("This feature is under development. Please check back later.")
     #     DEFAULT_CONFIG_KEYS = [
