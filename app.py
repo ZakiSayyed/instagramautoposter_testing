@@ -824,7 +824,7 @@ else:
                     col_index = (col_index + 1) % 2
                     if col_index == 0 and idx != len(METRICS) - 1:
                         chart_cols = st.columns(2)
-        st.markdown("---")
+        st.markdown("----")
 
     elif menu == "Scheduled Posts":
         st.title("📅 Scheduled Posts Calendar View")
