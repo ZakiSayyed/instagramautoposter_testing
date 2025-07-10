@@ -575,6 +575,7 @@ else:
                     if match:
                         hour = int(match.group(1))
                         used_hours.add(hour)
+                        print("-")
                         period = match.group(2).upper()
                         if period == "PM" and hour != 12:
                             hour += 12
