@@ -1,6 +1,6 @@
 #Prod
-from datetime import datetime, date, time, timedelta
-import os
+from datetime import datetime, timedelta
+import time
 import streamlit as st
 import requests
 import pandas as pd
@@ -903,8 +903,8 @@ else:
                                 if isinstance(post['scheduled_time'], str)
                                 else post['scheduled_time']
                             )
-                            new_date = st.date_input(f"Date_{post['id']}", value=post_dt.date())
-                            new_time = st.time_input(f"Time_{post['id']}", value=post_dt.time())
+                            new_date = st.date_input(f"Date", value=post_dt.date())
+                            new_time = st.time_input(f"Time", value=post_dt.time())
                             new_datetime = datetime.combine(new_date, new_time)
 
                             if new_datetime != post_dt:
