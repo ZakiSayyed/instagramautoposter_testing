@@ -48,10 +48,10 @@ def upload_to_cloudinary(image_path):
     try:
         result = cloudinary.uploader.upload(image_path)
         url = result.get("secure_url")
-        #print(f"✅ Uploaded to Cloudinary: {url}")
+        print(f"✅ Uploaded to Cloudinary: {url}")
         return url
     except Exception as e:
-        #print(f"❌ Cloudinary upload failed: {e}")
+        print(f"❌ Cloudinary upload failed: {e}")
         return None
     
 #______________________________________________________________________________________________________#
@@ -126,21 +126,21 @@ def check_posts_with_dont_use_until_today():
                         matching_posts.append(post)
 
                 except ValueError as ve:
-                    #print(f"⚠️ Skipping invalid datetime: {dont_use_until_str} ({ve})")
+                    print(f"⚠️ Skipping invalid datetime: {dont_use_until_str} ({ve})")
         if matching_posts:
             for post in matching_posts:
-                #print(f"📌 Match found: {post['image_path']} — {post['dont_use_until']}")
+                print(f"📌 Match found: {post['image_path']} — {post['dont_use_until']}")
                 reuse_post(post['id'])
                 if response:
-                    #print("Post ready to reuse")
+                    print("Post ready to reuse")
                     time.sleep(2)
                 # schedule_post(post['id'])
                 pass
         else:
-            #print("✅ No posts with today's dont_use_until date.")
+            print("✅ No posts with today's dont_use_until date.")
 
     except Exception as e:
-        #print(f"❌ Error checking posts: {e}")
+        print(f"❌ Error checking posts: {e}")
 
 def check_reusable_posts():
     try:
@@ -152,14 +152,14 @@ def check_reusable_posts():
 
         if response.data:
             reusable_ids = [post["id"] for post in response.data]
-            #print(f"✅ Reusable Post IDs: {reusable_ids}")
+            print(f"✅ Reusable Post IDs: {reusable_ids}")
             return reusable_ids
         else:
-            #print("✅ No reusable posts found.")
+            print("✅ No reusable posts found.")
             return []
 
     except Exception as e:
-        #print(f"❌ Error checking reusable posts: {e}")
+        print(f"❌ Error checking reusable posts: {e}")
         return []
 
 def schedule_post(post_ids, dont_use_until=90):
@@ -176,7 +176,7 @@ def schedule_post(post_ids, dont_use_until=90):
                 image_url = response.data.get("image_url")
                 image_path = response.data.get("image_path")
                 
-                #print(f"Image URL: {image_url}")
+                print(f"Image URL: {image_url}")
                 
                 engagement_data = build_post_insight_json() 
                 generated_caption = generate_caption(
@@ -188,7 +188,7 @@ def schedule_post(post_ids, dont_use_until=90):
                         )
 
                 generated_output = generated_caption
-                #print(f"Generated caption: {generated_output}")
+                print(f"Generated caption: {generated_output}")
                 caption = generated_output.split("Recommended Time:")[0].strip()
 
                 hour = 12  # Default
@@ -204,23 +204,23 @@ def schedule_post(post_ids, dont_use_until=90):
                     start_date = datetime.today().date()
                     selected_time = datetime.combine(start_date, datetime.min.time()).replace(hour=hour, minute=0)
                     dontuseuntill = datetime.combine(start_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    #print(dontuseuntill)
+                    print(dontuseuntill)
                     update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)                           
                 else:
-                    #print("⚠️ Recommended time not found, using 12:00 PM default")
+                    print("⚠️ Recommended time not found, using 12:00 PM default")
                     st.warning("⚠️ Recommended time not found, using 12:00 PM default")
                     start_date = datetime.today().date()
                     post_date = start_date + timedelta(days=batch_num * interval_days)
                     selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
                     dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    #print(dontuseuntill)
+                    print(dontuseuntill)
                     update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)    
 
             else:
-                #print(f"❌ No post found with id: {post_id}")
+                print(f"❌ No post found with id: {post_id}")
         
         except Exception as e:
-            #print(f"❌ Error fetching post: {e}")
+            print(f"❌ Error fetching post: {e}")
 
 
 def reuse_post(post_id):
@@ -308,7 +308,7 @@ def delete_post(post_id):
 
 #Generate captions
 def generate_caption(image_path, image_name, engagement_data, used_hours=None, image_url=None):
-    #print("Generate caption function ", image_url)
+    print("Generate caption function ", image_url)
     if used_hours is None:
         used_hours = set()
 
@@ -322,10 +322,10 @@ def generate_caption(image_path, image_name, engagement_data, used_hours=None, i
         if img_response.status_code == 200:
             base64_image = base64.b64encode(img_response.content).decode('utf-8')
         else:
-            #print(f"❌ Failed to fetch image from URL: {image_url}")
+            print(f"❌ Failed to fetch image from URL: {image_url}")
             return None
     else:
-        #print("❌ No image URL provided.")
+        print("❌ No image URL provided.")
         return None
 
     # -------------------- Step 1: Recommended Posting Time Prompt --------------------
@@ -447,7 +447,7 @@ def generate_caption(image_path, image_name, engagement_data, used_hours=None, i
         content = data['choices'][0]['message']['content']
         return content.strip()
     else:
-        #print("Error:", response.text)
+        print("Error:", response.text)
         return None
     
 #End of Generate captions code
@@ -524,7 +524,7 @@ def get_account_insights(IG_USER_ID, access_token):
     if response.status_code == 200:
         return response.json().get("data", [])
     else:
-        #print("❌ Error fetching account insights:", response.status_code, response.text)
+        print("❌ Error fetching account insights:", response.status_code, response.text)
         return []
  
 def get_ig_business_account_id(page_id, access_token):
@@ -578,7 +578,7 @@ def convert_image(input_path, output_format='jpg'):
     output_path = os.path.splitext(input_path)[0] + f".{output_format}"
     image_format = 'JPEG' if output_format.lower() == 'jpg' else 'PNG'
     image.save(output_path, format=image_format)
-    # #print(f"Converted: {input_path} → {output_path}")
+    # print(f"Converted: {input_path} → {output_path}")
     return output_path
 
 
@@ -720,8 +720,8 @@ else:
                         os.remove(final_image_path)
                     os.rename(converted_image_path, final_image_path)
 
-                    # #print(f"Final image path: {final_image_path}")
-                    # #print(f"Image name: {image.name}")                              
+                    # print(f"Final image path: {final_image_path}")
+                    # print(f"Image name: {image.name}")                              
                     img_name = image.name
                     if post_already_scheduled_check(image.name):
                         st.info(f"{img_name} - Post already used")
@@ -729,14 +729,14 @@ else:
                         with st.spinner("Uploading Image"):
                             # Step 3: Upload to Cloudinary
                             url = upload_to_cloudinary(final_image_path)
-                            #print("URL is ", url)
+                            print("URL is ", url)
                             if not url:
                                 st.error(f"❌ Failed to upload image: {image.name}")
                                 continue
                             # st.success(f"✅ Image uploaded: {image.name}")
 
                             # Step 4: Generate caption if not cached
-                            #print("Generating caption")
+                            print("Generating caption")
                             try:
                                 if (
                                     "generated_caption" not in st.session_state
@@ -752,10 +752,10 @@ else:
                                         )
                                     st.session_state.last_image = image.name
                             except Exception as e:
-                                #print("Error generating caption : ", e)
-                            #print("Caption generated")
+                                print("Error generating caption : ", e)
+                            print("Caption generated")
                             generated_output = st.session_state.generated_caption
-                            #print(generated_output)
+                            print(generated_output)
                             caption = generated_output.split("Recommended Time:")[0].strip()
 
                             # Step 5: Extract time (e.g. "6 PM")
@@ -779,7 +779,7 @@ else:
                                     st.info(f"✅ Already scheduled: {image.name} on {selected_time}")
                                 else:
                                     dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                                    #print(dontuseuntill)
+                                    print(dontuseuntill)
 
                                     add_post(image.name, caption, selected_time, url, dontuseuntill)
                                     # st.success(f"✅ Post scheduled successfully for {image.name}")
@@ -1038,7 +1038,7 @@ else:
         tab1, tab2 = st.tabs(["📅 Calendar View", "📝 Manage Scheduled Posts"])
         with tab1:
             posts = get_all_posts()
-            # #print("Fetched posts", posts)
+            # print("Fetched posts", posts)
 
             if posts:
                 # Transform posts into calendar events
