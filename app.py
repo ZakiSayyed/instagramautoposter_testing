@@ -176,7 +176,7 @@ def schedule_post(post_ids, dont_use_until=90):
                 image_url = response.data.get("image_url")
                 image_path = response.data.get("image_path")
                 
-                print(f"Image URL: {image_url}")
+                # print(f"Image URL: {image_url}")
                 
                 engagement_data = build_post_insight_json() 
                 generated_caption = generate_caption(
@@ -188,7 +188,7 @@ def schedule_post(post_ids, dont_use_until=90):
                         )
 
                 generated_output = generated_caption
-                print(f"Generated caption: {generated_output}")
+                # print(f"Generated caption: {generated_output}")
                 caption = generated_output.split("Recommended Time:")[0].strip()
 
                 hour = 12  # Default
@@ -204,7 +204,7 @@ def schedule_post(post_ids, dont_use_until=90):
                     start_date = datetime.today().date()
                     selected_time = datetime.combine(start_date, datetime.min.time()).replace(hour=hour, minute=0)
                     dontuseuntill = datetime.combine(start_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    print(dontuseuntill)
+                    # print(dontuseuntill)
                     update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)                           
                 else:
                     print("⚠️ Recommended time not found, using 12:00 PM default")
@@ -213,7 +213,7 @@ def schedule_post(post_ids, dont_use_until=90):
                     post_date = start_date + timedelta(days=batch_num * interval_days)
                     selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
                     dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    print(dontuseuntill)
+                    # print(dontuseuntill)
                     update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)    
 
             else:
@@ -308,7 +308,8 @@ def delete_post(post_id):
 
 #Generate captions
 def generate_caption(image_path, image_name, engagement_data, used_hours=None, image_url=None):
-    print("Generate caption function ", image_url)
+    # print(f"Used hours is : {used_hours}")
+    # print("Generate caption function ", image_url)
     if used_hours is None:
         used_hours = set()
 
@@ -352,9 +353,9 @@ def generate_caption(image_path, image_name, engagement_data, used_hours=None, i
     Engagement Data:
     {engagement_data}
     """
-    # if used_hours:
-    #     avoid_times = ", ".join(f"{h % 12 or 12} {'AM' if h < 12 else 'PM'}" for h in sorted(used_hours))
-    #     recommended_time_prompt += f"\n\nAlready used times (avoid): {avoid_times}"
+    if used_hours:
+        avoid_times = ", ".join(f"{h % 12 or 12} {'AM' if h < 12 else 'PM'}" for h in sorted(used_hours))
+        recommended_time_prompt += f"\n\nAlready used times (avoid): {avoid_times}"
     # -------------------- Step 2: Caption Format Structure --------------------
 
     structure = """
@@ -412,9 +413,13 @@ def generate_caption(image_path, image_name, engagement_data, used_hours=None, i
     Follow this structure exactly:
     {structure}
 
-    Your response must always use "Recommended Time:" to indicate the best time to post (don't use anything else to return the time other than "Recommended Time:").    
+    No matter what ALWAYS use the following response format:
+    Caption:
+    Recommended Time:
 
-    Use the following information to determine it:
+    Important:
+    If you have value for avoid hours, choose a different recommended time.
+    Use the following information to determine the recommended time:
     {recommended_time_prompt}
     """
 
@@ -729,14 +734,14 @@ else:
                         with st.spinner("Uploading Image"):
                             # Step 3: Upload to Cloudinary
                             url = upload_to_cloudinary(final_image_path)
-                            print("URL is ", url)
+                            # print("URL is ", url)
                             if not url:
                                 st.error(f"❌ Failed to upload image: {image.name}")
                                 continue
                             # st.success(f"✅ Image uploaded: {image.name}")
 
                             # Step 4: Generate caption if not cached
-                            print("Generating caption")
+                            # print("Generating caption")
                             try:
                                 if (
                                     "generated_caption" not in st.session_state
@@ -747,15 +752,15 @@ else:
                                             final_image_path,
                                             image.name,
                                             engagement_data,
-                                            used_hours=used_hours,
+                                            used_hours,
                                             image_url=url
                                         )
                                     st.session_state.last_image = image.name
                             except Exception as e:
                                 print("Error generating caption : ", e)
-                            print("Caption generated")
+                            # print("Caption generated")
                             generated_output = st.session_state.generated_caption
-                            print(generated_output)
+                            # print(generated_output)
                             caption = generated_output.split("Recommended Time:")[0].strip()
 
                             # Step 5: Extract time (e.g. "6 PM")
@@ -779,7 +784,7 @@ else:
                                     st.info(f"✅ Already scheduled: {image.name} on {selected_time}")
                                 else:
                                     dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                                    print(dontuseuntill)
+                                    # print(dontuseuntill)
 
                                     add_post(image.name, caption, selected_time, url, dontuseuntill)
                                     # st.success(f"✅ Post scheduled successfully for {image.name}")
