@@ -17,7 +17,6 @@ from streamlit_calendar import calendar
 import cloudinary
 import cloudinary.uploader
 
-
 register_heif_opener()
 
 # Use secrets from Streamlit Cloud
@@ -189,33 +188,35 @@ def schedule_post(post_ids, dont_use_until=90):
                         )
 
                 generated_output = generated_caption
-                # print(f"Generated caption: {generated_output}")
                 caption = generated_output.split("Recommended Time:")[0].strip()
 
-                hour = 12  # Default
                 match = re.search(r"(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
+
                 if match:
                     hour = int(match.group(1))
-                    used_hours.add(hour)
                     period = match.group(2).upper()
+
                     if period == "PM" and hour != 12:
                         hour += 12
                     elif period == "AM" and hour == 12:
                         hour = 0
+
+                    used_hours.add(hour)
                     start_date = datetime.today().date()
                     selected_time = datetime.combine(start_date, datetime.min.time()).replace(hour=hour, minute=0)
                     dontuseuntill = datetime.combine(start_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    # print(dontuseuntill)
-                    update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)                           
+
                 else:
                     print("⚠️ Recommended time not found, using 12:00 PM default")
-                    st.warning("⚠️ Recommended time not found, using 12:00 PM default")
-                    start_date = datetime.today().date()
-                    post_date = start_date + timedelta(days=batch_num * interval_days)
+                    hour = 12  # Default to 12 PM
+                    used_hours.add(hour)
+
+                    post_date = datetime.today().date() + timedelta(days=batch_num * interval_days)
                     selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
                     dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    # print(dontuseuntill)
-                    update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)    
+
+                # Now safe to use selected_time and dontuseuntill in both branches
+                update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)
 
             else:
                 print(f"❌ No post found with id: {post_id}")
@@ -309,8 +310,6 @@ def delete_post(post_id):
 
 #Generate captions
 def generate_caption(image_path, image_name, engagement_data, used_hours=None, image_url=None):
-    # print(f"Used hours is : {used_hours}")
-    # print("Generate caption function ", image_url)
     if used_hours is None:
         used_hours = set()
 
@@ -333,96 +332,87 @@ def generate_caption(image_path, image_name, engagement_data, used_hours=None, i
     # -------------------- Step 1: Recommended Posting Time Prompt --------------------
 
     recommended_time_prompt = f"""
-    You are a social media strategist helping an eyewear brand optimize their Instagram posting schedule.
+    You are a social media strategist for a Black-owned luxury eyewear brand. Your task is to identify the **single best hour (in EST)** to post on Instagram to maximize engagement.
 
-    Your task is to:
-    • Analyze hourly engagement trends across past posts.
-    • Optionally factor in follower online activity per hour (if available).
-    • Recommend the **single best hour to post (in EST)** to maximize visibility and engagement.
-
-    Data available:
-    • Post timestamps (UTC + EST)
-    • Engagement metrics per post: likes, comments, shares, saves, total_interactions
-    • Average engagement per hour (0–23 UTC)
-    • (Optional) Online follower distribution by hour
+    Use the following data:
+    • Post timestamps (UTC and EST)
+    • Engagement per post: likes, comments, shares, saves, total_interactions
+    • Avg engagement by hour (0–23 UTC)
+    • (Optional) Follower online activity by hour
 
     Instructions:
-    • Prioritize hours where engagement is consistently high.
-    • If follower activity supports the same hours, boost confidence in those times.
-    • Return only the best hour to post (EST), with a short explanation if needed.
+    • Prioritize hours with consistently high engagement.
+    • If follower activity aligns with those hours, boost confidence in those times.
+    • Avoid the following hours if provided.
+    • Return **only one best hour (EST)** with a brief explanation if necessary.
 
     Engagement Data:
     {engagement_data}
     """
+
     if used_hours:
         avoid_times = ", ".join(f"{h % 12 or 12} {'AM' if h < 12 else 'PM'}" for h in sorted(used_hours))
-        recommended_time_prompt += f"\n\nAlready used times (avoid): {avoid_times}"
+        recommended_time_prompt += f"\n\nAvoid these hours: {avoid_times}"
+
     # -------------------- Step 2: Caption Format Structure --------------------
 
     structure = """
-    1. Hook:  
-    • One clever, stylish, and confident sentence  
-    • Use tasteful emojis  
+    1. Hook (1 sentence):
+    • Bold, clever, and confident
+    • Use tasteful emojis
     • Must feel culturally aware and modern
 
-    2. Core description (2–3 short punchy sentences):  
-    • Describe the eyewear or scene  
-    • Highlight craftsmanship, culture, quality, and brand values  
-    • Mention design names like “Barbados Edition” if visually identifiable  
-    • Reference current seasons or cultural moments if relevant
+    2. Core description (2–3 punchy lines):
+    • Describe the eyewear or scene
+    • Highlight craftsmanship, culture, quality, and brand story
+    • Mention design names like “Barbados Edition” if visible
+    • Reference the season or cultural moments (if relevant)
 
-    3. Caption break: Use a single em dash (—)
+    3. Caption break:
+    • Use one em dash (—)
 
-    4. Hashtags block (max 15):  
-    • Always include: #CIKEyewear #CultureInEveryFrame  
+    4. Hashtag block (max 15):
+    • Always include: #CIKEyewear #CultureInEveryFrame
     • Choose from:
-        #BlackOwnedEyewear  
-        #HandmadeInItaly  
-        #LuxuryEyewear  
-        #BarbadosEdition  
-        #AmericaBlackEdition  
-        #StatementSunglasses  
-        #BuiltByHand  
-        #BoldByDesign  
-        #SlowFashion  
-        #ArtisanEyewear  
-        #IslandStyle  
-        #BlackLuxury  
-        #CulturalCraftsmanship  
-        #FounderLed  
-        #SummerStyle
+    #BlackOwnedEyewear #HandmadeInItaly #LuxuryEyewear #BarbadosEdition
+    #AmericaBlackEdition #StatementSunglasses #BuiltByHand #BoldByDesign
+    #SlowFashion #ArtisanEyewear #IslandStyle #BlackLuxury
+    #CulturalCraftsmanship #FounderLed #SummerStyle
     """
 
-    # -------------------- Step 3: Final Prompt to Send to LLM --------------------
+# -------------------- Step 3: Final Prompt to LLM --------------------
 
     prompt_use = f"""
     Generate an Instagram caption for a photo of CIK Eyewear sunglasses.
 
     Brand Overview:
-    CIK is a Black-owned, Caribbean-American–founded luxury eyewear brand. Every pair is handmade in Italy using premium materials and cultural storytelling. Designs include symbols like the Barbados Trident or the eagle-beak bridge of the America Black Edition. The brand is bold, confident, heritage-driven, and stylish—representing global Black excellence.
+    CIK is a Black-owned, Caribbean-American–founded luxury eyewear brand. Every pair is handmade in Italy with premium materials and cultural storytelling. Designs include the Barbados Trident and the eagle-beak bridge from the America Black Edition. The tone is bold, confident, founder-led, and represents global Black excellence.
 
     Instructions:
-    • Reference the image name `{image_name}` (without file extension if the name makes sense otherwise ignore it)
-    • Write a caption that reflects what’s visible or known about the photo
-    • Avoid generic filler text or intros
-    • Use no more than 200 characters total
-    • Match the format and tone defined below
-    • Avoid repeating hashtags
-    • Style: confident, inclusive, culturally connected, and founder-led
-    • Do not use the captions already generated from the engagement data, be innovative and generate something out of the box.
+    • Refer to the image name `{image_name}` (ignore extension, and skip if irrelevant).
+    • Write a caption that reflects what is visible or known about the sunglasses.
+    • Use the background only to set the mood, not to describe it literally.
+    • Avoid filler text or overused phrases.
+    • Do not reuse captions from previous engagement data.
+    • Max 200 characters.
+    • Follow the exact format and tone below.
+    • Style: confident, culturally grounded, stylish.
 
-    Follow this structure exactly:
+    Structure:
     {structure}
 
-    No matter what ALWAYS use the following response format:
-    Caption:
-    Recommended Time:
+    Important Formatting Instructions:
+    • **Only return the caption text** – do not label it with "Caption:"
+    • Then, on the next line, return `Recommended Time:` followed by the best EST hour
+    • Do not add any extra lines, commentary, or labels
+    • Final output format must be:
+    [Caption text]
+    Recommended Time: [Hour in EST]
 
-    Important:
-    If you have value for avoid hours, choose a different recommended time.
-    Use the following information to determine the recommended time:
+    Use the following information to determine the Recommended Time:
     {recommended_time_prompt}
     """
+
 
     payload = {
         "model": "gpt-4o",
@@ -576,7 +566,6 @@ def convert_image(input_path, output_format='jpg'):
     if output_format.lower() not in ['jpg', 'png']:
         raise ValueError("Output format must be 'jpg' or 'png'")
 
-    # Register HEIF plugin (for .heic and similar formats)
     pillow_heif.register_heif_opener()
 
     image = Image.open(input_path)
@@ -769,7 +758,6 @@ else:
                                     st.session_state.last_image = image.name
                             except Exception as e:
                                 print("Error generating caption : ", e)
-
                             generated_output = st.session_state.generated_caption
                             caption = generated_output.split("Recommended Time:")[0].strip()
 
@@ -784,7 +772,6 @@ else:
                                         hour = 0
                                 else:
                                     hour = 12
-                                    st.warning("⚠️ Recommended time not found, using 12:00 PM default")
 
                                 used_hours.add(hour)
 
