@@ -1,4 +1,4 @@
-#Prod
+#Testing
 from datetime import datetime, timedelta, date
 import time
 import streamlit as st
@@ -728,6 +728,10 @@ else:
                     # print(f"Final image path: {final_image_path}")
                     # print(f"Image name: {image.name}")                              
                     img_name = image.name
+                except Exception as e:
+                    st.error(f"❌ Error processing image {image.name}: {e}")
+                
+                try:
                     if post_already_scheduled_check(image.name):
                         st.info(f"{img_name} - Post already used")
                     else:
@@ -738,10 +742,6 @@ else:
                             if not url:
                                 st.error(f"❌ Failed to upload image: {image.name}")
                                 continue
-                            # st.success(f"✅ Image uploaded: {image.name}")
-
-                            # Step 4: Generate caption if not cached
-                            # print("Generating caption")
                             try:
                                 if (
                                     "generated_caption" not in st.session_state
@@ -758,24 +758,29 @@ else:
                                     st.session_state.last_image = image.name
                             except Exception as e:
                                 print("Error generating caption : ", e)
-                            # print("Caption generated")
+
                             generated_output = st.session_state.generated_caption
-                            # print(generated_output)
                             caption = generated_output.split("Recommended Time:")[0].strip()
 
-                            # Step 5: Extract time (e.g. "6 PM")
-                            hour = 12  # Default
-                            match = re.search(r"(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
-                            if match:
-                                hour = int(match.group(1))
+                            try:
+                                match = re.search(r"(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
+                                if match:
+                                    hour = int(match.group(1))
+                                    period = match.group(2).upper()
+                                    if period == "PM" and hour != 12:
+                                        hour += 12
+                                    elif period == "AM" and hour == 12:
+                                        hour = 0
+                                else:
+                                    hour = 12
+                                    st.warning("⚠️ Recommended time not found, using 12:00 PM default")
+
                                 used_hours.add(hour)
-                                period = match.group(2).upper()
-                                if period == "PM" and hour != 12:
-                                    hour += 12
-                                elif period == "AM" and hour == 12:
-                                    hour = 0
-                            else:
-                                st.warning("⚠️ Recommended time not found, using 12:00 PM default")
+
+                            except Exception as e:
+                                hour = 12
+                                used_hours.add(hour)
+                                st.error(f"Unexpected error while parsing time: {e}")
 
                             # Step 6: Schedule post
                             if posting_status is False:
