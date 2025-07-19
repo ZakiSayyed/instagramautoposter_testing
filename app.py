@@ -17,6 +17,7 @@ from streamlit_calendar import calendar
 import cloudinary
 import cloudinary.uploader
 
+
 register_heif_opener()
 
 # Use secrets from Streamlit Cloud
@@ -569,21 +570,31 @@ def get_post_insights(media_id, access_token):
     response = requests.get(url, params=params)
     return response.json().get('data', [])
 
-from PIL import Image
 
 # Re-save uploaded image to ensure format compatibility
 def convert_image(input_path, output_format='jpg'):
     if output_format.lower() not in ['jpg', 'png']:
         raise ValueError("Output format must be 'jpg' or 'png'")
 
-    # Register HEIF plugin
+    # Register HEIF plugin (for .heic and similar formats)
     pillow_heif.register_heif_opener()
 
     image = Image.open(input_path)
+
+    # If saving as JPEG and image has alpha, convert it
+    if output_format.lower() == 'jpg' and image.mode in ('RGBA', 'LA'):
+        # Create white background and paste the image on it
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        image = image.convert("RGBA")
+        background.paste(image, mask=image.split()[3])  # use alpha channel as mask
+        image = background
+    elif image.mode != 'RGB' and output_format.lower() == 'jpg':
+        image = image.convert("RGB")
+
     output_path = os.path.splitext(input_path)[0] + f".{output_format}"
     image_format = 'JPEG' if output_format.lower() == 'jpg' else 'PNG'
     image.save(output_path, format=image_format)
-    # print(f"Converted: {input_path} → {output_path}")
+    
     return output_path
 
 
