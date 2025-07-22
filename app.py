@@ -157,154 +157,153 @@ def fetch_posting_configs():
         return None
 
 
-def check_posts_with_dont_use_until_today():
-    today = date.today()
-    try:
-        response = supabase.table("postsdb") \
-            .select("*") \
-            .execute()
-        matching_posts = []
-        for post in response.data:
-            dont_use_until_str = post.get("dont_use_until")
-            if dont_use_until_str:
-                try:
-                    # Parse the string into a datetime object
-                    dont_use_until_dt = datetime.strptime(dont_use_until_str.strip(), "%Y-%m-%d %H:%M:%S")
+# def check_posts_with_dont_use_until_today():
+#     today = date.today()
+#     try:
+#         response = supabase.table("postsdb") \
+#             .select("*") \
+#             .execute()
+#         matching_posts = []
+#         for post in response.data:
+#             dont_use_until_str = post.get("dont_use_until")
+#             if dont_use_until_str:
+#                 try:
+#                     # Parse the string into a datetime object
+#                     dont_use_until_dt = datetime.strptime(dont_use_until_str.strip(), "%Y-%m-%d %H:%M:%S")
 
-                    # Compare only the date parts
-                    if dont_use_until_dt.date() == today:
-                        matching_posts.append(post)
+#                     # Compare only the date parts
+#                     if dont_use_until_dt.date() == today:
+#                         matching_posts.append(post)
 
-                except ValueError as ve:
-                    print(f"⚠️ Skipping invalid datetime: {dont_use_until_str} ({ve})")
-        if matching_posts:
-            for post in matching_posts:
-                print(f"📌 Match found: {post['image_path']} — {post['dont_use_until']}")
-                reuse_post(post['id'])
-                if response:
-                    print("Post ready to reuse")
-                    time.sleep(2)
-                # schedule_post(post['id'])
-                pass
-        else:
-            print("✅ No posts with today's dont_use_until date.")
+#                 except ValueError as ve:
+#                     print(f"⚠️ Skipping invalid datetime: {dont_use_until_str} ({ve})")
+#         if matching_posts:
+#             for post in matching_posts:
+#                 print(f"📌 Match found: {post['image_path']} — {post['dont_use_until']}")
+#                 reuse_post(post['id'])
+#                 if response:
+#                     print("Post ready to reuse")
+#                     time.sleep(2)
+#                 # schedule_post(post['id'])
+#                 pass
+#         else:
+#             print("✅ No posts with today's dont_use_until date.")
 
-    except Exception as e:
-        print(f"❌ Error checking posts: {e}")
+#     except Exception as e:
+#         print(f"❌ Error checking posts: {e}")
 
-def check_reusable_posts():
-    try:
-        response = supabase.table("postsdb") \
-            .select("id, caption, scheduled_time") \
-            .eq("caption", "") \
-            .eq("scheduled_time", "") \
-            .execute()
+# def check_reusable_posts():
+#     try:
+#         response = supabase.table("postsdb") \
+#             .select("id, caption, scheduled_time") \
+#             .eq("caption", "") \
+#             .eq("scheduled_time", "") \
+#             .execute()
 
-        if response.data:
-            reusable_ids = [post["id"] for post in response.data]
-            print(f"✅ Reusable Post IDs: {reusable_ids}")
-            return reusable_ids
-        else:
-            print("✅ No reusable posts found.")
-            return []
+#         if response.data:
+#             reusable_ids = [post["id"] for post in response.data]
+#             print(f"✅ Reusable Post IDs: {reusable_ids}")
+#             return reusable_ids
+#         else:
+#             print("✅ No reusable posts found.")
+#             return []
 
-    except Exception as e:
-        print(f"❌ Error checking reusable posts: {e}")
-        return []
+#     except Exception as e:
+#         print(f"❌ Error checking reusable posts: {e}")
+#         return []
 
-def schedule_post(post_ids, dont_use_until=90):
-    for post_id in post_ids:
-        used_hours = set()
-        try:
-            response = supabase.table("postsdb") \
-                .select("*") \
-                .eq("id", post_id) \
-                .single() \
-                .execute()
+# def schedule_post(post_ids, dont_use_until=90):
+#     for post_id in post_ids:
+#         used_hours = set()
+#         try:
+#             response = supabase.table("postsdb") \
+#                 .select("*") \
+#                 .eq("id", post_id) \
+#                 .single() \
+#                 .execute()
 
-            if response.data:
-                image_url = response.data.get("image_url")
-                image_path = response.data.get("image_path")
+#             if response.data:
+#                 image_url = response.data.get("image_url")
+#                 image_path = response.data.get("image_path")
                 
-                print(f"Image URL: {image_url}")
+#                 print(f"Image URL: {image_url}")
                 
-                engagement_data = build_post_insight_json() 
-                generated_caption = generate_caption(
-                            None,
-                            None,
-                            engagement_data,
-                            used_hours,
-                            image_url
-                        )
+#                 engagement_data = build_post_insight_json() 
+#                 generated_caption = generate_caption(
+#                             None,
+#                             None,
+#                             engagement_data,
+#                             used_hours,
+#                             image_url
+#                         )
 
-                generated_output = generated_caption
-                print(f"Generated caption: {generated_output}")
-                caption = generated_output.split("Recommended Time:")[0].strip()
+#                 generated_output = generated_caption
+#                 print(f"Generated caption: {generated_output}")
+#                 caption = generated_output.split("Recommended Time:")[0].strip()
 
-                hour = 12  # Default
-                match = re.search(r"(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
-                if match:
-                    hour = int(match.group(1))
-                    used_hours.add(hour)
-                    period = match.group(2).upper()
-                    if period == "PM" and hour != 12:
-                        hour += 12
-                    elif period == "AM" and hour == 12:
-                        hour = 0
-                    start_date = datetime.today().date()
-                    selected_time = datetime.combine(start_date, datetime.min.time()).replace(hour=hour, minute=0)
-                    dontuseuntill = datetime.combine(start_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    print(dontuseuntill)
-                    update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)                           
-                else:
-                    print("⚠️ Recommended time not found, using 12:00 PM default")
-                    st.warning("⚠️ Recommended time not found, using 12:00 PM default")
-                    start_date = datetime.today().date()
-                    post_date = start_date + timedelta(days=batch_num * interval_days)
-                    selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
-                    dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
-                    print(dontuseuntill)
-                    update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)    
+#                 hour = 12  # Default
+#                 match = re.search(r"(\d{1,2})\s*(AM|PM)", generated_output, re.IGNORECASE)
+#                 if match:
+#                     hour = int(match.group(1))
+#                     used_hours.add(hour)
+#                     period = match.group(2).upper()
+#                     if period == "PM" and hour != 12:
+#                         hour += 12
+#                     elif period == "AM" and hour == 12:
+#                         hour = 0
+#                     start_date = datetime.today().date()
+#                     selected_time = datetime.combine(start_date, datetime.min.time()).replace(hour=hour, minute=0)
+#                     dontuseuntill = datetime.combine(start_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
+#                     print(dontuseuntill)
+#                     update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)                           
+#                 else:
+#                     print("⚠️ Recommended time not found, using 12:00 PM default")
+#                     st.warning("⚠️ Recommended time not found, using 12:00 PM default")
+#                     start_date = datetime.today().date()
+#                     post_date = start_date + timedelta(days=batch_num * interval_days)
+#                     selected_time = datetime.combine(post_date, datetime.min.time()).replace(hour=hour, minute=0)
+#                     dontuseuntill = datetime.combine(post_date + timedelta(days=dont_use_until), datetime.min.time()).replace(hour=hour, minute=0)
+#                     print(dontuseuntill)
+#                     update_resuseable_posts(post_id, caption, selected_time, dontuseuntill)    
 
-            else:
-                print(f"❌ No post found with id: {post_id}")
+#             else:
+#                 print(f"❌ No post found with id: {post_id}")
         
-        except Exception as e:
-            print(f"❌ Error fetching post: {e}")
+#         except Exception as e:
+#             print(f"❌ Error fetching post: {e}")
 
+# def reuse_post(post_id):
+#     response = supabase.table("postsdb") \
+#         .update({
+#             "scheduled_time": "",       # Empty string
+#             "caption": "",              # Empty string
+#             "posted": "Pending",        # Set status to "Pending"
+#             "dont_use_until": ""        # Empty string
+#         }) \
+#         .eq("id", post_id) \
+#         .execute()
 
-def reuse_post(post_id):
-    response = supabase.table("postsdb") \
-        .update({
-            "scheduled_time": "",       # Empty string
-            "caption": "",              # Empty string
-            "posted": "Pending",        # Set status to "Pending"
-            "dont_use_until": ""        # Empty string
-        }) \
-        .eq("id", post_id) \
-        .execute()
+#     return response
 
-    return response
-
-# Check if a post with the same image and scheduled time is already scheduled
-def post_already_scheduled(image_name, scheduled_time):
-    image_path = f"uploads/{image_name}"
-    scheduled_time = str(scheduled_time)
+# # Check if a post with the same image and scheduled time is already scheduled
+# def post_already_scheduled(image_name, scheduled_time):
+#     image_path = f"uploads/{image_name}"
+#     scheduled_time = str(scheduled_time)
     
-    response = supabase.table("postsdb").select("*") \
-        .eq("image_path", image_path) \
-        .eq("scheduled_time", scheduled_time) \
-        .execute()
+#     response = supabase.table("postsdb").select("*") \
+#         .eq("image_path", image_path) \
+#         .eq("scheduled_time", scheduled_time) \
+#         .execute()
     
-    return bool(response.data)
+#     return bool(response.data)
 
-def post_already_scheduled_check(image_name):
-    image_path = image_name
-    response = supabase.table("postsdb").select("*") \
-        .eq("image_path", image_path) \
-        .execute()
+# def post_already_scheduled_check(image_name):
+#     image_path = image_name
+#     response = supabase.table("postsdb").select("*") \
+#         .eq("image_path", image_path) \
+#         .execute()
 
-    return bool(response.data)
+#     return bool(response.data)
 
 # Add a new post to the Supabase database
 def add_post(image_path, caption, scheduled_time, url, dontuse):
